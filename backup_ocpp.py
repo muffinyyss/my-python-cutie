@@ -20,15 +20,15 @@ from datetime import datetime
 PI_USER = "pi"
 PI_HOST = "192.168.0.15"
 REMOTE_DIR = "~/ocpp"                 # folder on the Pi to download
-LOCAL_DIR = r"D:\eds_cream\github\ocpp_backup\7Eleven_Latphrao126"
-STATION = ""                           # station name; empty = use the last folder of LOCAL_DIR
+LOCAL_DIR = r"D:\eds_cream\github\ocpp_backup\Thungtako1"
+STATION = "Thungtako1"                           # station name; empty = use the last folder of LOCAL_DIR
 CLEAN_LOGS = True                      # remove *.log on the Pi after download
 
 # Zip — only the .zip ends up in LOCAL_DIR (download happens in a temp folder)
 MAKE_ZIP = True                        # True = keep only ocpp_<station>.zip in LOCAL_DIR
 
 # ZeroTier
-ZT_NETWORK_ID = ""                     # <-- put your ZeroTier network ID here (16 hex chars)
+ZT_NETWORK_ID = "9f77fc393ed908e0"                     # <-- put your ZeroTier network ID here (16 hex chars)
 ZT_WAIT_SECS = 60                      # how long to wait for the Pi to become reachable
 # zerotier-cli path on Windows (default install location). Leave as-is if installed normally.
 ZT_CLI = r"C:\ProgramData\ZeroTier\One\zerotier-one_x64.exe"
@@ -38,18 +38,24 @@ ZT_CLI = r"C:\ProgramData\ZeroTier\One\zerotier-one_x64.exe"
 def run(cmd):
     """Run a command, streaming output. Returns True on success."""
     print(f"\n>>> {' '.join(cmd)}")
-    result = subprocess.run(cmd)
+    try:
+        result = subprocess.run(cmd)
+    except FileNotFoundError:
+        print(f"[WARN] Command not found: {cmd[0]}")
+        return False
     return result.returncode == 0
 
 
 def zt_cli():
     """Return a runnable zerotier-cli invocation, or None if not found."""
-    # Prefer the cli on PATH (Linux/Mac or if user added it on Windows)
-    if shutil.which("zerotier-cli"):
-        return ["zerotier-cli"]
-    # Windows: the service exe accepts "-q" to act as the cli
+    # On Windows, prefer the service exe with "-q" — subprocess can't run the
+    # zerotier-cli.bat directly, and the exe is what actually works here.
     if os.path.isfile(ZT_CLI):
         return [ZT_CLI, "-q"]
+    # Linux/Mac (or if the real cli is on PATH)
+    found = shutil.which("zerotier-cli")
+    if found:
+        return [found]
     return None
 
 
@@ -67,10 +73,12 @@ def ensure_zerotier():
     cli = zt_cli()
     if cli is None:
         print("[WARN] zerotier-cli not found. Make sure ZeroTier is installed and running.")
-        print(f"       (looked on PATH and at {ZT_CLI})")
+        print(f"       (looked at {ZT_CLI} and on PATH)")
     elif ZT_NETWORK_ID:
-        # Join the network (idempotent — safe to run even if already joined)
-        run(cli + ["join", ZT_NETWORK_ID])
+        # Try to join (idempotent). Needs admin rights; if it fails we don't
+        # care as long as the Pi is reachable (you likely joined already).
+        if not run(cli + ["join", ZT_NETWORK_ID]):
+            print("[INFO] join skipped/failed (may need admin) — checking reachability anyway.")
     else:
         print("[INFO] ZT_NETWORK_ID is empty — skipping join, will just check reachability.")
 
@@ -130,12 +138,12 @@ def main():
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    # 2) Remove .log files on the Pi (only after a successful download)
+    # 2) Remove .log files and MDBlog.txt on the Pi (only after a successful download)
     if CLEAN_LOGS:
-        if run(["ssh", target, "rm -f /home/pi/ocpp/*.log"]):
-            print("[OK] Remote .log files removed.")
+        if run(["ssh", target, "rm -f /home/pi/ocpp/*.log /home/pi/ocpp/MDBlog.txt"]):
+            print("[OK] Remote .log files and MDBlog.txt removed.")
         else:
-            print("[WARN] Could not remove remote .log files.")
+            print("[WARN] Could not remove remote .log / MDBlog.txt files.")
 
     elapsed = (datetime.now() - start).total_seconds()
     print("\n" + "=" * 50)
