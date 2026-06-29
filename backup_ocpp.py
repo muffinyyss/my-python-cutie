@@ -138,7 +138,11 @@ def main():
             print("[WARN] Could not remove remote .log files.")
 
     elapsed = (datetime.now() - start).total_seconds()
-    print(f"\nDone in {elapsed:.1f}s.")
+    print("\n" + "=" * 50)
+    print(f"  Backup สำเร็จ! ใช้เวลา {elapsed:.1f} วินาที")
+    if MAKE_ZIP:
+        print(f"  ไฟล์: {os.path.join(LOCAL_DIR, f'ocpp_{station}.zip')}")
+    print("=" * 50)
 
 
 if __name__ == "__main__":
