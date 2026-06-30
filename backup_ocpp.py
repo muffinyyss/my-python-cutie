@@ -138,12 +138,16 @@ def main():
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    # 2) Remove .log files and MDBlog.txt on the Pi (only after a successful download)
+    # 2) On the Pi: delete .log files, but only empty out MDBlog.txt (keep the file)
     if CLEAN_LOGS:
-        if run(["ssh", target, "rm -f /home/pi/ocpp/*.log /home/pi/ocpp/MDBlog.txt"]):
-            print("[OK] Remote .log files and MDBlog.txt removed.")
+        remote_cmd = (
+            "rm -f /home/pi/ocpp/*.log; "
+            "truncate -s 0 /home/pi/ocpp/MDBlog.txt"
+        )
+        if run(["ssh", target, remote_cmd]):
+            print("[OK] Remote .log files removed and MDBlog.txt cleared.")
         else:
-            print("[WARN] Could not remove remote .log / MDBlog.txt files.")
+            print("[WARN] Could not clean remote .log / MDBlog.txt files.")
 
     elapsed = (datetime.now() - start).total_seconds()
     print("\n" + "=" * 50)
